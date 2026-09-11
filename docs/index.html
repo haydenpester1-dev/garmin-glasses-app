@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+<meta name="description" content="Glanceable Garmin fitness stats for Meta Ray-Ban Display glasses">
+<meta name="mrbd-web-app-capable" content="yes">
+<title>Garmin Stats</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="title">GARMIN</div>
+    <div class="synced" id="synced">connecting…</div>
+  </header>
+  <main>
+    <section class="tile" data-focusable tabindex="0">
+      <div class="label">Steps</div>
+      <div class="value" id="steps">–</div>
+      <div class="chart" id="steps-chart"></div>
+      <div class="sub" id="steps-sub"></div>
+    </section>
+    <section class="tile" data-focusable tabindex="0">
+      <div class="label">Heart rate</div>
+      <div class="value"><span id="hr">–</span><small> bpm</small></div>
+      <div class="chart" id="hr-chart"></div>
+      <div class="sub" id="hr-sub"></div>
+    </section>
+    <section class="tile" data-focusable tabindex="0">
+      <div class="label">Body Battery</div>
+      <div class="value"><span id="bb">–</span><small>%</small></div>
+      <div class="chart" id="bb-chart"></div>
+      <div class="sub" id="bb-sub"></div>
+    </section>
+    <section class="tile" data-focusable tabindex="0">
+      <div class="label">Readiness</div>
+      <div class="value"><span id="ready">–</span></div>
+      <div class="sub" id="ready-sub"></div>
+    </section>
+  </main>
+  <div class="strip">
+    <section class="tile slim" data-focusable tabindex="0">
+      <div class="label">Sleep</div>
+      <div class="value"><span id="sleep">–</span><small> h</small></div>
+    </section>
+    <section class="tile slim" data-focusable tabindex="0">
+      <div class="label">VO₂ max</div>
+      <div class="value"><span id="vo2">–</span></div>
+    </section>
+  </div>
+  <footer>
+    <button id="refresh" data-focusable>Refresh</button>
+  </footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
