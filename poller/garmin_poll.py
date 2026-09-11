@@ -86,8 +86,15 @@ def build_feed(client):
     feed["resting_hr"] = hr.get("restingHeartRate")
 
     bb = safe("get_body_battery", client.get_body_battery, today_iso) or []
+    # real shape: [{"bodyBatteryValuesArray": [[ts_ms, level], ...], ...}]
+    pairs = []
+    if isinstance(bb, list) and bb and isinstance(bb[0], dict) \
+            and "bodyBatteryValuesArray" in bb[0]:
+        pairs = bb[0]["bodyBatteryValuesArray"] or []
+    elif isinstance(bb, list):
+        pairs = bb
     bb_vals = []
-    for point in bb:
+    for point in pairs:
         if isinstance(point, (list, tuple)) and len(point) >= 2:
             v = point[1]
         elif isinstance(point, dict):
@@ -96,7 +103,10 @@ def build_feed(client):
             v = None
         if isinstance(v, (int, float)):
             bb_vals.append(v)
-    feed["body_battery"] = bb_vals[-1] if bb_vals else None
+    # stats carries the most recent value even when the curve is sparse
+    feed["body_battery"] = stats.get("bodyBatteryMostRecentValue")
+    if feed["body_battery"] is None and bb_vals:
+        feed["body_battery"] = bb_vals[-1]
     # downsample intraday curve to <= 48 points for the chart
     if len(bb_vals) > 48:
         step = len(bb_vals) / 48
@@ -104,24 +114,32 @@ def build_feed(client):
     feed["bb_curve"] = bb_vals
 
     sleep = safe("get_sleep_data", client.get_sleep_data, today_iso) or {}
-    secs = sleep.get("sleepTimeSeconds")
+    dto = sleep.get("dailySleepDTO") or {}
+    secs = dto.get("sleepTimeSeconds", sleep.get("sleepTimeSeconds"))
     feed["sleep_hours"] = round(secs / 3600, 1) if secs else None
 
     readiness = safe("get_training_readiness", client.get_training_readiness, today_iso)
+    # real shape: [{"score": 72, "level": "MODERATE", ...}]
+    if isinstance(readiness, list) and readiness:
+        readiness = readiness[0]
     if isinstance(readiness, dict):
         # shape varies by API version; probe common keys
         feed["readiness"] = (
             readiness.get("score") or readiness.get("readinessScore")
         )
-        feed["readiness_label"] = (
-            readiness.get("level") or readiness.get("readinessLevel") or ""
-        )
+        level = readiness.get("level") or readiness.get("readinessLevel") or ""
+        feed["readiness_label"] = level.capitalize() if level else ""
     else:
         feed["readiness"] = readiness if isinstance(readiness, (int, float)) else None
         feed["readiness_label"] = ""
 
     tstatus = safe("get_training_status", client.get_training_status, today_iso) or {}
-    feed["vo2max"] = tstatus.get("vo2maxRunning") or tstatus.get("vo2Max")
+    vo2 = tstatus.get("vo2maxRunning") or tstatus.get("vo2Max")
+    if vo2 is None:
+        # real shape: {"mostRecentVO2Max": {"generic": {"vo2MaxValue": 53.0}}}
+        gen = (tstatus.get("mostRecentVO2Max") or {}).get("generic") or {}
+        vo2 = gen.get("vo2MaxValue")
+    feed["vo2max"] = int(vo2) if isinstance(vo2, float) and vo2.is_integer() else vo2
 
     # 7-day history for charts (oldest first)
     days = [(today - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
