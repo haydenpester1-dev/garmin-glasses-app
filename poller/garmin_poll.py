@@ -33,7 +33,10 @@ def get_client(tokenstore_path):
 
     tokens_b64 = os.environ.get("GARMIN_TOKENS")
     if tokens_b64:
-        with open(tokenstore_path, "wb") as fh:
+        # garminconnect >= 0.2.x uses a tokenstore *directory* containing
+        # garmin_tokens.json; the secret holds the base64 of that JSON file.
+        os.makedirs(tokenstore_path, exist_ok=True)
+        with open(os.path.join(tokenstore_path, "garmin_tokens.json"), "wb") as fh:
             fh.write(base64.b64decode(tokens_b64))
     try:
         client = Garmin()
@@ -156,8 +159,9 @@ def main():
 
     # If we authenticated with a password this run, refresh the stored tokens
     # so the next run can use them (caller persists GARMIN_TOKENS separately).
-    if not os.environ.get("GARMIN_TOKENS") and os.path.exists(tokenstore_path):
-        with open(tokenstore_path, "rb") as fh:
+    if not os.environ.get("GARMIN_TOKENS"):
+        refreshed = os.path.join(tokenstore_path, "garmin_tokens.json")
+        if os.path.exists(refreshed):
             eprint("tokenstore refreshed; re-encode to update the GARMIN_TOKENS secret if needed")
 
 
