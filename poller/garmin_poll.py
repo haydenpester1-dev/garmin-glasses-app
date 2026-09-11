@@ -14,6 +14,18 @@ import json
 import os
 import sys
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+
+def user_today():
+    """'Today' in the user's timezone -- the Actions runner is on UTC, but
+    Garmin data is per the user's local day."""
+    tzname = os.environ.get("GARMIN_TZ", "America/New_York")
+    try:
+        tz = ZoneInfo(tzname)
+    except Exception:  # noqa: BLE001 - bad tz name falls back to UTC
+        tz = timezone.utc
+    return datetime.now(tz).date()
 
 
 def eprint(*a):
@@ -57,22 +69,23 @@ def get_client(tokenstore_path):
 
 
 def build_feed(client):
-    today = date.today().isoformat()
+    today = user_today()
+    today_iso = today.isoformat()
     feed = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "date": today,
+        "date": today_iso,
     }
 
-    stats = safe("get_stats", client.get_stats, today) or {}
+    stats = safe("get_stats", client.get_stats, today_iso) or {}
     feed["steps"] = stats.get("totalSteps")
     feed["step_goal"] = stats.get("dailyStepGoal")
     feed["distance_km"] = round((stats.get("totalDistanceMeters") or 0) / 1000, 1)
     feed["active_min"] = round((stats.get("highlyActiveSeconds") or 0) / 60)
 
-    hr = safe("get_heart_rates", client.get_heart_rates, today) or {}
+    hr = safe("get_heart_rates", client.get_heart_rates, today_iso) or {}
     feed["resting_hr"] = hr.get("restingHeartRate")
 
-    bb = safe("get_body_battery", client.get_body_battery, today) or []
+    bb = safe("get_body_battery", client.get_body_battery, today_iso) or []
     bb_vals = []
     for point in bb:
         if isinstance(point, (list, tuple)) and len(point) >= 2:
@@ -90,11 +103,11 @@ def build_feed(client):
         bb_vals = [bb_vals[int(i * step)] for i in range(48)]
     feed["bb_curve"] = bb_vals
 
-    sleep = safe("get_sleep_data", client.get_sleep_data, today) or {}
+    sleep = safe("get_sleep_data", client.get_sleep_data, today_iso) or {}
     secs = sleep.get("sleepTimeSeconds")
     feed["sleep_hours"] = round(secs / 3600, 1) if secs else None
 
-    readiness = safe("get_training_readiness", client.get_training_readiness, today)
+    readiness = safe("get_training_readiness", client.get_training_readiness, today_iso)
     if isinstance(readiness, dict):
         # shape varies by API version; probe common keys
         feed["readiness"] = (
@@ -107,11 +120,11 @@ def build_feed(client):
         feed["readiness"] = readiness if isinstance(readiness, (int, float)) else None
         feed["readiness_label"] = ""
 
-    tstatus = safe("get_training_status", client.get_training_status, today) or {}
+    tstatus = safe("get_training_status", client.get_training_status, today_iso) or {}
     feed["vo2max"] = tstatus.get("vo2maxRunning") or tstatus.get("vo2Max")
 
     # 7-day history for charts (oldest first)
-    days = [(date.today() - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
+    days = [(today - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
     steps_7d, rhr_7d = [], []
     for d in days:
         s = safe(f"get_stats[{d}]", client.get_stats, d) or {}
@@ -138,13 +151,13 @@ def main():
     client, tokenstore_path = get_client(args.tokenstore)
 
     if args.probe:
-        today = date.today().isoformat()
+        today_iso = user_today().isoformat()
         dump = {
-            "stats": safe("get_stats", client.get_stats, today),
-            "heart_rates": safe("get_heart_rates", client.get_heart_rates, today),
-            "body_battery_head": (safe("get_body_battery", client.get_body_battery, today) or [])[:3],
-            "training_readiness": safe("get_training_readiness", client.get_training_readiness, today),
-            "training_status": safe("get_training_status", client.get_training_status, today),
+            "stats": safe("get_stats", client.get_stats, today_iso),
+            "heart_rates": safe("get_heart_rates", client.get_heart_rates, today_iso),
+            "body_battery_head": (safe("get_body_battery", client.get_body_battery, today_iso) or [])[:3],
+            "training_readiness": safe("get_training_readiness", client.get_training_readiness, today_iso),
+            "training_status": safe("get_training_status", client.get_training_status, today_iso),
         }
         print(json.dumps(dump, indent=2, default=str))
         return
